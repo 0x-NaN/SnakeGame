@@ -1,154 +1,78 @@
-# 🐍 Snake Game: Logic, Python Implementation & RL Integration Guide
+# 🐍 Snake RL: PPO Implementation
 
-This document breaks down the core logic of the Snake game, explains how it's built with Python & Pygame, and provides a step-by-step roadmap to train a Reinforcement Learning (RL) agent to play it autonomously.
-
----
-
-## 1. 🧠 Core Game Logic
-
-The game follows a classic grid-based simulation loop:
-
-| Component | Logic |
-|-----------|-------|
-| **Grid System** | The screen is divided into `block_size` (20px) cells. All positions are snapped to this grid. |
-| **Snake Representation** | A Python list of `(x, y)` tuples. The last element is always the **head**. |
-| **Movement** | Each frame, a new head is calculated based on `direction`. It's appended to the list. If no food is eaten, the tail (`pop(0)`) is removed, creating the illusion of movement. |
-| **Food Spawning** | Random grid coordinates are generated until one falls outside the snake's body. |
-| **Collision Detection** | Fails if the new head: <br>• Goes outside `[0, WIDTH]` or `[0, HEIGHT]` (wall)<br>• Overlaps with `self.snake[:-1]` (self) |
-| **Game Loop** | `Event Polling → State Update → Rendering → Frame Cap` runs continuously until quit or collision. |
+A high-performance Snake game environment built with Python and Pygame, featuring an integrated Reinforcement Learning (RL) agent using the **Proximal Policy Optimization (PPO)** algorithm.
 
 ---
 
-## 2. 🐍 Python & Pygame Implementation Details
-
-### Why Python + Pygame?
-- **Python** offers fast prototyping, readable syntax, and a massive ML ecosystem.
-- **Pygame** handles low-level tasks: window creation, input polling, 2D drawing, and frame timing (`pygame.time.Clock`).
-
-### Architecture Highlights
-```python
-class SnakeGame:
-    def __init__(self): ...      # Initial state
-    def update_game(self): ...   # Pure logic (movement, collision, scoring)
-    def draw_game(self): ...     # Pure rendering (Pygame draw calls)
-```
-- **Separation of Concerns**: Logic and rendering are decoupled, making it easier to swap keyboard input for an AI agent later.
-- **Frame Rate Control**: `clock.tick(speed)` ensures consistent gameplay regardless of hardware.
-- **Python Features Used**: Lists for dynamic body tracking, tuples for immutable coordinates, f-strings for UI, and `sys.exit()` for clean termination.
-
-> 💡 *Note: The original snippet had indentation errors, missing color definitions, and a broken `if __name__` guard. These were corrected for Python 3.14 compatibility.*
+## 🛠 Tech Stack
+- **Language:** Python 3.10+
+- **GUI/Game Engine:** Pygame
+- **RL Framework:** Gymnasium (formerly OpenAI Gym)
+- **RL Library:** Stable-Baselines3 (PyTorch backend)
+- **Monitoring:** TensorBoard
 
 ---
 
-## 3. 🤖 Integrating Reinforcement Learning (RL)
+## 🚀 Getting Started
 
-To make the snake play itself, we frame it as a **Markov Decision Process (MDP)** and train an RL agent using libraries like `gymnasium` and `stable-baselines3`.
-
-### 3.1 Environment Wrapper (Gymnasium-Compatible)
-Pygame is too slow for direct RL training. We wrap the game logic into a standard environment that exposes `reset()`, `step()`, and `render()`.
-
-```python
-import gymnasium as gym
-import numpy as np
-
-class SnakeEnv(gym.Env):
-    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 10}
-    
-    def __init__(self, render_mode=None):
-        super().__init__()
-        self.action_space = gym.spaces.Discrete(4)  # UP, DOWN, LEFT, RIGHT
-        self.observation_space = gym.spaces.Box(low=0, high=1, shape=(11,), dtype=np.float32)
-        self.render_mode = render_mode
-        self.game = SnakeGame()  # Reuse existing logic class
-
-    def reset(self, seed=None, options=None):
-        super().reset(seed=seed)
-        self.game.restart()
-        return self._get_obs(), {}
-
-    def step(self, action):
-        # Map action to direction
-        dirs = ['UP', 'DOWN', 'LEFT', 'RIGHT']
-        # Prevent 180° turns
-        if dirs[action] != self.game._opposite(self.game.direction):
-            self.game.direction = dirs[action]
-            
-        self.game.update_game()
-        reward, done = self._calculate_reward()
-        return self._get_obs(), reward, done, False, {}
-
-    def _calculate_reward(self):
-        head = self.game.snake[-1]
-        # +10 for food, -10 for death, -0.1 per step, +0.1 for moving toward food
-        reward = -0.1
-        if head == self.game.food:
-            reward += 10
-        if done := (len(self.game.snake) == 0):  # Assuming game_over sets flag or raises
-            reward -= 10
-        return reward, done
-
-    def _get_obs(self):
-        # Normalized state: [head_x, head_y, food_x, food_y, danger_straight, danger_right, danger_left, dir_x, dir_y, ...]
-        return np.random.rand(11).astype(np.float32)  # Placeholder
-
-    def render(self):
-        if self.render_mode == "human":
-            self.game.draw_game()
+### 1. Installation
+```bash
+pip install pygame gymnasium stable-baselines3 shimmy tensorboard
 ```
 
-### 3.2 MDP Design
-| Component | Design Choice |
-|-----------|---------------|
-| **State Space** | `Box(11,)` or `Box(640, 480, 3)` for pixels. Structured vectors train faster. Include: head position, food position, danger in 3 directions, current direction, distance to food. |
-| **Action Space** | `Discrete(4)` → `[UP, DOWN, LEFT, RIGHT]` |
-| **Reward Function** | Crucial for convergence:<br>`+10` eat food<br>`-10` die<br>`-0.1` per step (prevents looping)<br>`+0.1` step toward food (dense reward shaping) |
-| **Terminal Condition** | Wall/self collision or max steps reached. |
+### 2. Usage Modes
+The project supports three distinct execution modes via `snake_game.py`:
 
-### 3.3 Recommended Algorithms
-| Algorithm | Pros | Cons |
-|-----------|------|------|
-| **DQN** (Deep Q-Network) | Simple, works well with discrete actions, well-documented for Snake | Can be unstable with sparse rewards |
-| **PPO** (Proximal Policy Optimization) | Stable, sample-efficient, modern default | Slightly more hyperparameter tuning |
-| **A2C** | Good balance of speed & stability | May struggle with long-horizon credit assignment |
+| Mode | Command | Description |
+|------|---------|-------------|
+| **Human** | `python snake_game.py` | Play manually with Arrow Keys. |
+| **Train** | `python snake_game.py train` | Train a new PPO agent (Headless). |
+| **Train (Vis)** | `python snake_game.py train --visualize` | Watch the agent learn in real-time. |
+| **Resume** | `python snake_game.py train --continue` | Resume training from `models/ppo_snake.zip`. |
+| **AI Play** | `python snake_game.py play` | Watch the best-trained model play 5 episodes. |
 
-📦 **Recommended Stack**: `gymnasium` + `stable-baselines3` (PyTorch) + `tensorboard` for monitoring.
-
-### 3.4 Step-by-Step Integration Guide
-1. **Decouple Logic from Rendering**: Ensure `update_game()` runs without `pygame.display.flip()` during training.
-2. **Wrap as Gym Env**: Implement `reset()`, `step()`, `_get_obs()`, `_calculate_reward()`.
-3. **Headless Training**: Run training without `render_mode="human"` to maximize FPS (1000+ steps/sec).
-4. **Train**:
-   ```python
-   from stable_baselines3 import PPO
-   env = SnakeEnv()
-   model = PPO("MlpPolicy", env, verbose=1, tensorboard_log="./logs/")
-   model.learn(total_timesteps=500_000)
-   model.save("snake_ppo")
-   ```
-5. **Inference & Visualization**:
-   ```python
-   env = SnakeEnv(render_mode="human")
-   model = PPO.load("snake_ppo")
-   obs, _ = env.reset()
-   for _ in range(1000):
-       action, _ = model.predict(obs, deterministic=True)
-       obs, reward, done, _, _ = env.step(action)
-       env.render()
-       if done: obs, _ = env.reset()
-   ```
-
-### 3.5 Training Tips & Common Pitfalls
-| Issue | Solution |
-|-------|----------|
-| **Agent spins in circles** | Add step penalty (`-0.1`) + reward for moving toward food |
-| **Slow training** | Use headless mode, vectorized environments (`SubprocVecEnv`), or frame skipping |
-| **Forgets how to eat** | Use reward clipping, increase food reward, or curriculum learning (start small grid) |
-| **Action latency** | Ensure `clock.tick()` matches RL step rate during inference |
+**Visualization Controls (during `--visualize`):**
+- `UP/DOWN`: Adjust Tick Rate (FPS).
+- `0`: Max Speed (1000 FPS).
+- `1`: Normal Speed (30 FPS).
 
 ---
 
-## 📚 Next Steps & Resources
-- 📖 **Gymnasium Docs**: https://gymnasium.farama.org/
-- 🤖 **Stable Baselines3**: https://stable-baselines3.readthedocs.io/
-- 🧪 **Open-Source Snake RL**: Search `snake-gymnasium` or `rl-snake` on GitHub for reference implementations.
-- 🚀 **Advanced**: Add curriculum learning (grow grid as score increases), imitation learning from human replays, or multi-agent competitive modes.
+## 🧠 Reinforcement Learning Design
+
+### Algorithm: PPO (Proximal Policy Optimization)
+- **Policy:** `MlpPolicy` (Multi-layer Perceptron).
+- **Architecture:** Efficient MLP optimized for a 14-feature relative observation vector.
+
+### Observation Space (14-element Vector)
+The agent perceives its surroundings through a compact relative state representation:
+
+1.  **Danger straight, right, left (3 bits):** Binary flags for immediate collision.
+2.  **Direction (4 bits):** [Left, Right, Up, Down] (Current absolute movement).
+3.  **Food Location (4 bits):** [Left, Right, Up, Down] (Relative to head).
+4.  **Future View (3 floats):** Normalized distances (0 to 1) to the nearest obstacle (wall or body) in the Straight, Right, and Left relative directions.
+
+### Reward System
+| Event | Reward | Rationale |
+|-------|--------|-----------|
+| **Eat Food** | `+10` | Primary objective. |
+| **Collision** | `-10` | Terminal penalty (Wall or Body). |
+| **Survival** | `0` | Default reward per step. |
+
+---
+
+## ⚙️ Constants & Assumptions
+- **Grid Size:** 600x400 pixels.
+- **Block Size:** 20px (All coordinates are snapped to this grid).
+- **Stagnation Timeout:** Episodes end if the snake takes `100 * len(snake)` steps without eating.
+- **Model Path:** Saved to `models/ppo_snake.zip`.
+- **Logs:** TensorBoard logs stored in `ppo_snake_tensorboard/`.
+
+---
+
+## 📊 Monitoring
+To view training metrics (Reward, Loss, Episode Length):
+```bash
+tensorboard --logdir=ppo_snake_tensorboard
+```
+Then visit `http://localhost:6006` in your browser.

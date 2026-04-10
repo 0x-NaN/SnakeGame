@@ -15,10 +15,10 @@ def train(visualize=False, fps=30, continue_training=False):
 
     if continue_training and os.path.exists(f"{model_path}.zip"):
         print(f"Loading existing model from {model_path}...")
-        model = PPO.load(model_path, env=env)
+        model = PPO.load(model_path, env=env, device="cpu")
     else:
-        print("Creating new model...")
-        # Define model
+        print("Creating new model with MlpPolicy...")
+        # Define model with MlpPolicy for flattened grid state
         model = PPO(
             "MlpPolicy", 
             env, 
@@ -29,6 +29,7 @@ def train(visualize=False, fps=30, continue_training=False):
             batch_size=64,
             n_epochs=10,
             gamma=0.99,
+            device="cpu"
         )
 
     print("Starting training...")
