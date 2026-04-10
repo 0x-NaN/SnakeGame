@@ -59,78 +59,73 @@ class SnakeGame:
 
     def get_state(self):
         head = self.snake[-1]
+
+        # --- 1-step danger points ---
         point_l = (head[0] - BLOCK_SIZE, head[1])
         point_r = (head[0] + BLOCK_SIZE, head[1])
         point_u = (head[0], head[1] - BLOCK_SIZE)
         point_d = (head[0], head[1] + BLOCK_SIZE)
+
+        # --- 2-step danger points ---
+        point_ll = (head[0] - 2 * BLOCK_SIZE, head[1])
+        point_rr = (head[0] + 2 * BLOCK_SIZE, head[1])
+        point_uu = (head[0], head[1] - 2 * BLOCK_SIZE)
+        point_dd = (head[0], head[1] + 2 * BLOCK_SIZE)
 
         dir_l = self.direction == "LEFT"
         dir_r = self.direction == "RIGHT"
         dir_u = self.direction == "UP"
         dir_d = self.direction == "DOWN"
 
+        # --- Normalized food distance ---
+        food_dist_x = (self.food[0] - head[0]) / WIDTH
+        food_dist_y = (self.food[1] - head[1]) / HEIGHT
+
+        # --- Normalized snake length ---
+        max_cells = (WIDTH // BLOCK_SIZE) * (HEIGHT // BLOCK_SIZE)
+        snake_length_norm = len(self.snake) / max_cells
+
         state = [
-            # Danger straight
+            # Danger straight (1 step)
             (dir_r and self.is_collision(point_r)) or
             (dir_l and self.is_collision(point_l)) or
             (dir_u and self.is_collision(point_u)) or
             (dir_d and self.is_collision(point_d)),
 
-            # Danger right
+            # Danger right (1 step)
             (dir_u and self.is_collision(point_r)) or
             (dir_d and self.is_collision(point_l)) or
             (dir_l and self.is_collision(point_u)) or
             (dir_r and self.is_collision(point_d)),
 
-            # Danger left
+            # Danger left (1 step)
             (dir_d and self.is_collision(point_r)) or
             (dir_u and self.is_collision(point_l)) or
             (dir_r and self.is_collision(point_u)) or
             (dir_l and self.is_collision(point_d)),
 
-            # Move direction
-            dir_l,
-            dir_r,
-            dir_u,
-            dir_d,
+            # Danger straight (2 steps)
+            (dir_r and self.is_collision(point_rr)) or
+            (dir_l and self.is_collision(point_ll)) or
+            (dir_u and self.is_collision(point_uu)) or
+            (dir_d and self.is_collision(point_dd)),
 
-            # Food location
+            # Move direction
+            dir_l, dir_r, dir_u, dir_d,
+
+            # Food direction booleans
             self.food[0] < head[0],  # food left
             self.food[0] > head[0],  # food right
             self.food[1] < head[1],  # food up
-            self.food[1] > head[1]   # food down
+            self.food[1] > head[1],  # food down
+
+            # Normalized continuous features
+            food_dist_x,
+            food_dist_y,
+            snake_length_norm,
         ]
 
-        # Future view: Distance to nearest obstacle in 3 relative directions
-        dist_s = self._get_dist_to_obstacle(self.direction)
-        
-        # Directions: RIGHT -> DOWN -> LEFT -> UP
-        dirs = ["RIGHT", "DOWN", "LEFT", "UP"]
-        idx = dirs.index(self.direction)
-        dist_r = self._get_dist_to_obstacle(dirs[(idx + 1) % 4])
-        dist_l = self._get_dist_to_obstacle(dirs[(idx - 1) % 4])
-        
-        # Normalize distances by max possible distance
-        # Max distance is about 30 in x and 20 in y. Let's use 30 as normalization factor.
-        state.extend([dist_s / 30.0, dist_r / 30.0, dist_l / 30.0])
-
         return np.array(state, dtype=np.float32)
-
-    def _get_dist_to_obstacle(self, direction):
-        head = self.snake[-1]
-        dx, dy = 0, 0
-        if direction == "RIGHT": dx = BLOCK_SIZE
-        elif direction == "LEFT": dx = -BLOCK_SIZE
-        elif direction == "UP": dy = -BLOCK_SIZE
-        elif direction == "DOWN": dy = BLOCK_SIZE
-        
-        dist = 0
-        curr = (head[0] + dx, head[1] + dy)
-        while not self.is_collision(curr):
-            dist += 1
-            # Move curr
-            curr = (curr[0] + dx, curr[1] + dy)
-        return dist
 
     def is_collision(self, pt=None):
         if pt is None:
@@ -151,8 +146,10 @@ class SnakeGame:
                 return (x, y)
 
     def step(self, action):
+        """
+        Action: 0=Straight, 1=Right Turn, 2=Left Turn
+        """
         self.frame_iteration += 1
-        
         # 1. Update Direction
         clock_wise = ["RIGHT", "DOWN", "LEFT", "UP"]
         idx = clock_wise.index(self.direction)
@@ -182,8 +179,7 @@ class SnakeGame:
         # 3. Check Game Over
         reward = 0
         done = False
-        # Stagnation timer: Reset on food, otherwise end if too many steps taken
-        if self.is_collision() or self.frame_iteration > 100 * len(self.snake):
+        if self.is_collision() or self.frame_iteration > max(300, 100 * len(self.snake)):
             done = True
             reward = -10
             return reward, done, self.score
@@ -193,10 +189,12 @@ class SnakeGame:
             self.score += 1
             reward = 10
             self.food = self.generate_food()
-            self.frame_iteration = 0 # RESET timer on success!
         else:
             self.snake.pop(0)
-            reward = 0
+            # Distance-based reward shaping: reward moving toward food, penalize moving away
+            old_dist = abs(head[0] - self.food[0]) + abs(head[1] - self.food[1])
+            new_dist = abs(new_head[0] - self.food[0]) + abs(new_head[1] - self.food[1])
+            reward = 0.1 if new_dist < old_dist else -0.1
 
         return reward, done, self.score
 
@@ -228,7 +226,7 @@ class SnakeEnv(gym.Env):
         super(SnakeEnv, self).__init__()
         self.game = SnakeGame()
         self.action_space = spaces.Discrete(3) # 0: Straight, 1: Right, 2: Left
-        self.observation_space = spaces.Box(low=0, high=1, shape=(14,), dtype=np.float32)
+        self.observation_space = spaces.Box(low=0, high=1, shape=(15,), dtype=np.float32)
         self.render_mode = render_mode
         self.fps = fps
         self.clock = pygame.time.Clock()
