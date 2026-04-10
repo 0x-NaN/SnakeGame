@@ -19,3 +19,26 @@
 | **`snake_game.py`** | Stagnation Limit | `100 * len(snake)` | ✅ `max(300, 100 * len(snake))` | ⏱️ Prevents premature termination on short snakes |
 | **`snake_game.py`** | Render FPS Control | Fixed or manual `time.sleep()` | ✅ Dynamic FPS via keyboard (`↑`/`↓`/`0`/`1`) | 🎮 Smoother, adjustable playback |
 ---
+
+
+
+
+
+
+C:\Users\asmit\Desktop\SnakeGame>python snake_game.py play
+pygame-ce 2.5.7 (SDL 2.32.10, Python 3.14.0)
+
+Loaded model from models/best/best_model
+
+Starting Episode 1
+Episode 1 Finished. Score: 34
+Starting Episode 2
+Episode 2 Finished. Score: 57
+Starting Episode 3
+Episode 3 Finished. Score: 37
+Starting Episode 4
+Episode 4 Finished. Score: 25
+Starting Episode 5
+Episode 5 Finished. Score: 42
+
+Avg Score: 39.0 | Max: 57 | Min: 25
